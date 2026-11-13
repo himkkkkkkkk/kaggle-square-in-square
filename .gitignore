@@ -1,0 +1,7 @@
+.venv/
+.pi/
+__pycache__/
+*.py[cod]
+run/
+runs/
+submission_details.csv
