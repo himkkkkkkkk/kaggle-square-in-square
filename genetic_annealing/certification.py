@@ -4,19 +4,26 @@ from dataclasses import dataclass, replace
 
 from squares_metric import PuzzleResult, evaluate_squares
 
-from .fast_geometry import rotated_corners, side_length
 from .genome import Layout, to_squares
 
 
 @dataclass(frozen=True)
-class CertifiedIncumbent:
-    """Best layout that passed evaluate_squares; only valid results are ever stored."""
+class CertifiedLayout:
+    """A layout together with the high-precision verdict it was certified with.
+
+    Only layouts that passed `evaluate_squares` are ever handed on as a champion. The
+    search side length, sqpack's float validator and the search fitness are never
+    substitutes for this verdict.
+    """
 
     n: int
     layout: Layout
     result: PuzzleResult
     certified_evaluations: int
-    fast_rejections: int = 0
+
+    @property
+    def valid(self) -> bool:
+        return bool(self.result.valid)
 
     @property
     def score(self) -> float:
@@ -24,32 +31,26 @@ class CertifiedIncumbent:
 
     @property
     def side_length(self) -> float:
+        if self.result.side_length is None:
+            raise ValueError(f"layout for n={self.n} is not certified: {self.result.reason}")
         return float(self.result.side_length)
 
 
-def certify_candidate(candidate: Layout, incumbent: CertifiedIncumbent) -> CertifiedIncumbent:
-    """Sole champion-update entry: fast screen, then evaluate_squares, then strict improvement.
+def certify_layout(layout: Layout, previous_evaluations: int = 0) -> CertifiedLayout:
+    """Run the project evaluator once and count that evaluation."""
+    result = evaluate_squares(layout.n, to_squares(layout))
+    return CertifiedLayout(layout.n, layout, result, previous_evaluations + 1)
 
-    The fast screen only skips candidates whose search-side L is not smaller than the
-    incumbent's certified L, because score = L / sqrt(n) - 1 is monotone in L and such a
-    candidate can never strictly improve the score. Every candidate whose fast L is strictly
-    smaller goes to evaluate_squares, which alone decides validity and strict score
-    improvement: the float screen is never used as proof of infeasibility or non-improvement,
-    and there is no tolerance window that could hide a genuinely smaller candidate.
+
+def certify_improvement(candidate: CertifiedLayout, incumbent: CertifiedLayout) -> CertifiedLayout:
+    """Sole champion-update entry: keep the incumbent unless the candidate is valid and strictly better.
+
+    Strictness matters: an equal-scoring candidate is not an improvement, so a search that
+    cannot beat the grid leaves the grid in place. Every candidate's evaluation is counted,
+    whether or not it wins.
     """
     if candidate.n != incumbent.n:
         raise ValueError("candidate and incumbent sizes must match")
-    candidate_side_length = side_length(rotated_corners(candidate.centers, candidate.angles))
-    if candidate_side_length >= incumbent.side_length:
-        return replace(incumbent, fast_rejections=incumbent.fast_rejections + 1)
-    result = evaluate_squares(incumbent.n, to_squares(candidate))
-    certified_evaluations = incumbent.certified_evaluations + 1
-    if result.valid and result.score < incumbent.score:
-        return CertifiedIncumbent(
-            n=incumbent.n,
-            layout=candidate,
-            result=result,
-            certified_evaluations=certified_evaluations,
-            fast_rejections=incumbent.fast_rejections,
-        )
-    return replace(incumbent, certified_evaluations=certified_evaluations)
+    if candidate.valid and candidate.score < incumbent.score:
+        return candidate
+    return replace(incumbent, certified_evaluations=candidate.certified_evaluations)
