@@ -62,13 +62,13 @@ export function SubmissionDropzone({
     >
       {!compact && (
         <div>
-          <h2 className="text-sm font-semibold text-slate-100">导入 submission.csv</h2>
+          <h2 className="text-sm font-semibold text-slate-100">导入 CSV / JSON 布局</h2>
           <p className="text-xs text-slate-400">支持拖放与文件选择；解析后按 n 分组预览。</p>
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={() => inputRef.current?.click()} className={PRIMARY_BUTTON}>
-          选择 CSV 文件
+          选择 CSV / JSON 文件
         </button>
         <button type="button" onClick={onDemo} className={SECONDARY_BUTTON}>
           示例布局
@@ -83,11 +83,11 @@ export function SubmissionDropzone({
         )}
       </div>
       <p className="text-[11px] text-slate-500">
-        必需列 n, square_id, x, y, angle（可选 id）。文件仅在当前浏览器会话中解析，不会上传到任何服务器。
+        CSV 列 n, square_id, x, y, angle；JSON 格式 <code>{'{"n": [[x, y, angle], ...]}'}</code>。文件仅在本地解析。
       </p>
       {isParsing && (
         <p role="status" className="text-xs text-sky-300">
-          正在解析 CSV…
+          正在解析文件…
         </p>
       )}
       {error && (
@@ -95,7 +95,13 @@ export function SubmissionDropzone({
           解析失败：{error}
         </p>
       )}
-      <input ref={inputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleChange} />
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".csv,.json,text/csv,application/json"
+        className="hidden"
+        onChange={handleChange}
+      />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import type { LoadedSubmission, PuzzleIssue, PuzzleLayout, SquareRecord } from '
 export const REQUIRED_COLUMNS = ['n', 'square_id', 'x', 'y', 'angle'] as const;
 export const MIN_PUZZLE_SIZE = 1;
 export const MAX_PUZZLE_SIZE = 1000;
+export const JSON_MAX_PUZZLE_SIZE = 2043;
 export const AREA_LOWER_BOUND_TOLERANCE = 1e-7;
 
 interface CsvRow {
@@ -89,6 +90,74 @@ export function parseSubmissionCsv(text: string, sourceName: string): Submission
     },
     error: null,
   };
+}
+
+/** Parse search/result.json: {"10": [[x, y, angle], ...]}. Array indices become square_id. */
+export function parseSubmissionJson(text: string, sourceName: string): SubmissionParseResult {
+  if (text.trim().length === 0) return { submission: null, error: '文件为空' };
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch (error) {
+    return { submission: null, error: `JSON 格式错误：${error instanceof Error ? error.message : String(error)}` };
+  }
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+    return { submission: null, error: 'JSON 顶层必须是 n 到布局数组的对象' };
+  }
+
+  const grouped = new Map<number, RawRecord[]>();
+  const fileIssues: PuzzleIssue[] = [];
+  for (const [nText, value] of Object.entries(data)) {
+    const n = Number(nText);
+    if (!/^\d+$/.test(nText) || !Number.isInteger(n) || n < MIN_PUZZLE_SIZE || n > JSON_MAX_PUZZLE_SIZE) {
+      fileIssues.push({
+        severity: 'error',
+        kind: 'structure',
+        message: `n="${nText}" 不在 ${MIN_PUZZLE_SIZE}..${JSON_MAX_PUZZLE_SIZE}`,
+      });
+      continue;
+    }
+    if (!Array.isArray(value)) return { submission: null, error: `n=${n} 的布局不是数组` };
+    const records: RawRecord[] = [];
+    for (const [squareId, square] of value.entries()) {
+      if (
+        !Array.isArray(square) ||
+        square.length !== 3 ||
+        square.some((item) => typeof item !== 'number' && typeof item !== 'string')
+      ) {
+        return { submission: null, error: `n=${n} 的第 ${squareId} 个正方形必须是 [x, y, angle]` };
+      }
+      records.push({
+        line: squareId + 1,
+        squareIdText: String(squareId),
+        x: String(square[0]),
+        y: String(square[1]),
+        angle: String(square[2]),
+      });
+    }
+    grouped.set(n, records);
+  }
+  if (grouped.size === 0) return { submission: null, error: '没有可用的题目布局' };
+
+  const puzzles = [...grouped.entries()]
+    .sort((left, right) => left[0] - right[0])
+    .map(([n, records]) => buildPuzzle(n, records));
+  return {
+    submission: {
+      sourceName,
+      rowCount: puzzles.reduce((total, puzzle) => total + puzzle.rows, 0),
+      puzzleSizes: puzzles.map((puzzle) => puzzle.n),
+      puzzles,
+      fileIssues,
+    },
+    error: null,
+  };
+}
+
+export function parseSubmissionFile(text: string, sourceName: string): SubmissionParseResult {
+  return sourceName.toLowerCase().endsWith('.json')
+    ? parseSubmissionJson(text, sourceName)
+    : parseSubmissionCsv(text, sourceName);
 }
 
 function buildPuzzle(n: number, records: readonly RawRecord[]): PuzzleLayout {

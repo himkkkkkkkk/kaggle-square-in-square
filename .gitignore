@@ -5,3 +5,7 @@ __pycache__/
 run/
 runs/
 submission_details.csv
+search/result.json
+search/score.json
+search/incumbents.json
+evolution/
