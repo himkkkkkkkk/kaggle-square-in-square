@@ -4,7 +4,7 @@ import { parseDecimalLiteral } from '../domain/decimal';
 import { gridCsv, singleSquareCsv, twoSquaresCsv } from '../domain/fixtures';
 import { analyzeLayout, gridFallbackScore, rawScore, summarizeSubmission } from '../domain/metrics';
 import { checkOverlaps } from '../domain/overlap';
-import { parseSubmissionCsv, puzzleToCsv } from '../domain/submission';
+import { parseSubmissionCsv, parseSubmissionJson, puzzleToCsv } from '../domain/submission';
 import type { LoadedSubmission } from '../domain/types';
 
 function load(csv: string): LoadedSubmission {
@@ -127,6 +127,32 @@ describe('CSV 解析、异常与导出', () => {
     expect(pointInQuad({ x: 0.3, y: 0.3 }, layout.squares[0].quad)).toBe(true);
     expect(pickSquare(layout, { x: 0, y: 0 })).toBe(0);
     expect(pickSquare(layout, { x: 0.6, y: 0.6 })).toBeNull();
+  });
+});
+
+describe('JSON 布局解析', () => {
+  it('解析搜索结果并用数组下标作为 square_id', () => {
+    const result = parseSubmissionJson(
+      JSON.stringify({ 2: [['0.5', 0.5, 0], [1.5, '0.5', '0e0']] }),
+      'result.json',
+    );
+    expect(result.error).toBeNull();
+    const layout = result.submission?.puzzles[0];
+    expect(layout?.n).toBe(2);
+    expect(layout?.rows).toBe(2);
+    expect(layout?.squares.map((square) => square.squareId)).toEqual([0, 1]);
+    expect(layout?.squares[0].raw.x).toBe('0.5');
+    expect(layout?.squares[1].raw.angle).toBe('0e0');
+    expect(layout?.bounds?.sideLength).toBeCloseTo(2, 12);
+  });
+
+  it('支持 n=2043 并拒绝错误布局结构', () => {
+    const large = parseSubmissionJson('{"2043":[]}', 'large.json');
+    expect(large.submission?.puzzles[0].n).toBe(2043);
+    expect(large.submission?.puzzles[0].issues.some((issue) => issue.severity === 'error')).toBe(true);
+    const invalid = parseSubmissionJson('{"2":[[0,0]]}', 'bad.json');
+    expect(invalid.submission).toBeNull();
+    expect(invalid.error).toContain('[x, y, angle]');
   });
 });
 

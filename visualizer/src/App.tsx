@@ -13,7 +13,7 @@ import { unionBounds } from './domain/geometry';
 import { demoCsv, gridCsv } from './domain/fixtures';
 import { analyzeLayout, summarizeSubmission } from './domain/metrics';
 import { pairKey, pairsForSquare } from './domain/overlap';
-import { parseSubmissionCsv, puzzleToCsv } from './domain/submission';
+import { parseSubmissionFile, puzzleToCsv } from './domain/submission';
 import type { Camera, LoadedSubmission, OverlapPair, ViewportSize } from './domain/types';
 
 export default function App() {
@@ -89,7 +89,7 @@ export default function App() {
     setIsParsing(true);
     setParseError(null);
     window.setTimeout(() => {
-      const result = parseSubmissionCsv(text, sourceName);
+      const result = parseSubmissionFile(text, sourceName);
       if (result.submission) {
         setSubmission(result.submission);
         setActiveN(result.submission.puzzleSizes[0] ?? null);
